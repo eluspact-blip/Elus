@@ -4,6 +4,8 @@ export interface AppState {
   visualStyle: string;
   aspectRatio: '16:9' | '9:16' | '1:1';
   referenceImage: string[] | null;
+  assetImages: { url: string; description: string }[] | null;
+  assetLinks: { url: string; description: string }[] | null;
   status: 'idle' | 'analyzing' | 'generating' | 'ready';
   scenes: Scene[];
 }

@@ -10,6 +10,8 @@ export default function App() {
     visualStyle: '',
     aspectRatio: '16:9',
     referenceImage: null,
+    assetImages: null,
+    assetLinks: null,
     status: 'idle',
     scenes: []
   });
@@ -31,7 +33,9 @@ export default function App() {
           script: state.script,
           visualStyle: state.visualStyle,
           aspectRatio: state.aspectRatio,
-          referenceImages: state.referenceImage
+          referenceImages: state.referenceImage,
+          assetImages: state.assetImages,
+          assetLinks: state.assetLinks
         })
       });
       if (!res.ok) {
@@ -42,10 +46,10 @@ export default function App() {
       
       let imageIdx = 0;
       const finalScenes = data.scenes.map((scene: Scene) => {
-         // Keep the fallback insertion just in case it uses old layouts
-         if (state.referenceImage && state.referenceImage.length > 0) {
+         // Keep the fallback insertion just in case it uses old layouts and forgot the url
+         if (state.assetImages && state.assetImages.length > 0) {
             if (['image-card', 'profile-card', 'browser', 'phone'].includes(scene.layout) && !scene.layoutData?.url) {
-               const url = state.referenceImage[imageIdx % state.referenceImage.length];
+               const url = state.assetImages[imageIdx % state.assetImages.length].url;
                imageIdx++;
                return { ...scene, layoutData: { ...scene.layoutData, url } };
             }

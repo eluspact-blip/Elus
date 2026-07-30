@@ -16,8 +16,10 @@ export function CanvasPreview({ state, onReset }: CanvasPreviewProps) {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [isExporting, setIsExporting] = React.useState(false);
   const [exportComplete, setExportComplete] = React.useState(false);
+  const [showExportModal, setShowExportModal] = React.useState(false);
   const [scale, setScale] = React.useState(1);
   const [seekKey, setSeekKey] = React.useState(0);
+  const [fastRender, setFastRender] = React.useState(false);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const exportRecorderRef = React.useRef<MediaRecorder | null>(null);
@@ -53,10 +55,10 @@ export function CanvasPreview({ state, onReset }: CanvasPreviewProps) {
         const { width, height } = entry.contentRect;
         const targetW = state.aspectRatio === '16:9' ? 1280 : state.aspectRatio === '9:16' ? 720 : 900;
         const targetH = state.aspectRatio === '16:9' ? 720 : state.aspectRatio === '9:16' ? 1280 : 900;
-        // padding of 40px all around
-        const scaleX = (width) / targetW;
-        const scaleY = (height) / targetH;
-        setScale(Math.min(scaleX, scaleY));
+        // padding of 64px all around
+        const scaleX = (width - 64) / targetW;
+        const scaleY = (height - 64) / targetH;
+        setScale(Math.max(0, Math.min(scaleX, scaleY)));
       }
     });
     if (containerRef.current) observer.observe(containerRef.current);
@@ -131,7 +133,9 @@ export function CanvasPreview({ state, onReset }: CanvasPreviewProps) {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: "browser" },
-        audio: true
+        audio: true,
+        // @ts-ignore
+        preferCurrentTab: true
       } as any);
 
       const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
@@ -184,10 +188,12 @@ export function CanvasPreview({ state, onReset }: CanvasPreviewProps) {
   return (
     <div className="flex-1 bg-[#0A0A0A] border-l border-bg-surface flex object-cover flex-col items-center justify-center p-4 md:p-10 h-screen overflow-hidden relative">
        
-      <div className="w-full h-full max-w-[1280px] bg-black border border-neutral-800 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)] flex flex-col relative overflow-hidden">
+      <div className={isExporting 
+          ? "fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center pointer-events-none" 
+          : "w-full h-full max-w-[1280px] bg-black border border-neutral-800 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)] flex flex-col relative overflow-hidden"}>
         
         {/* Main Canvas Area */}
-        <div ref={containerRef} className="flex-1 p-0 flex items-center justify-center relative overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-neutral-900 to-black rounded-t-2xl">
+        <div ref={containerRef} className={`flex-1 p-0 flex items-center justify-center relative overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] ${isExporting ? 'from-black to-black' : 'from-neutral-900 to-black rounded-t-2xl'}`}>
           {state.status === 'idle' && (
             <div className="flex flex-col items-center text-neutral-500 max-w-sm text-center">
                <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
@@ -231,67 +237,40 @@ export function CanvasPreview({ state, onReset }: CanvasPreviewProps) {
                    height: state.aspectRatio === '16:9' ? 720 : state.aspectRatio === '9:16' ? 1280 : 900,
                    transform: `scale(${scale})`,
                    transformOrigin: 'center',
-                   backgroundColor: state.scenes[currentScene]?.themeConfig?.backgroundColor || '#000000',
-                   // border width omitted to create a clean video frame
+                   backgroundColor: state.scenes[calculatedScene]?.themeConfig?.backgroundColor || '#000000',
                  }}
               >
-                
                 <AnimatePresence mode="wait">
-                  {state.scenes[currentScene] && (
-                    <KineticScene key={`${currentScene}-${seekKey}`} scene={state.scenes[currentScene]} fastRender={isExporting} aspectRatio={state.aspectRatio} />
+                  {state.scenes[calculatedScene] && (
+                     <motion.div 
+                        key={`${calculatedScene}-${seekKey}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                        className="absolute inset-0 flex items-center justify-center"
+                     >
+                       <KineticScene scene={state.scenes[calculatedScene]} aspectRatio={state.aspectRatio} fastRender={fastRender || isExporting} />
+                     </motion.div>
                   )}
                 </AnimatePresence>
-
-                {!isPlaying && !isExporting && sceneProgress === 0 && currentScene === 0 && (
-                  <motion.div 
-                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                     className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10 cursor-pointer"
-                     onClick={togglePlay}
-                  >
-                     <button className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors backdrop-blur-md">
-                       <Play size={40} fill="white" className="ml-2 text-white" />
-                     </button>
-                  </motion.div>
-                )}
-                
-                {!isPlaying && !isExporting && (sceneProgress > 0 || currentScene > 0) && (
-                   // Paused State
-                   <motion.div 
-                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                     className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 z-10 cursor-pointer"
-                     onClick={togglePlay}
-                   >
-                     <button className="w-24 h-24 bg-black/50 rounded-full flex items-center justify-center hover:bg-black/70 transition-colors backdrop-blur-md text-white">
-                       <Play size={40} fill="white" className="ml-2" />
-                     </button>
-                   </motion.div>
-                )}
-
-                {isExporting && (
-                   <div className="absolute top-8 left-8 flex items-center gap-3 bg-red-600/90 py-2 px-4 rounded-full shadow-lg z-50 text-white animate-pulse font-medium">
-                     <div className="w-3 h-3 bg-white rounded-full"></div> Recording: Scene {currentScene + 1}/{state.scenes.length}
-                   </div>
-                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Video Player Controls Bar */}
-        {isReady && state.scenes.length > 0 && (
-          <div className="bg-neutral-900 border-t border-neutral-800 p-4 transition-all shrink-0">
-             {/* Scrubber / Progress Bar */}
-             <div className="w-full h-2 bg-neutral-800 rounded-full mb-4 relative group cursor-pointer">
-                <input
-                    type="range"
-                    min="0"
-                    max={totalDuration}
-                    step="10"
+        {/* Video Controls Bar */}
+        {!isExporting && state.scenes.length > 0 && (
+          <div className="bg-neutral-900 border-t border-neutral-800 p-4 px-6 flex flex-col gap-4">
+             <div className="group w-full h-2 bg-neutral-800 rounded-full relative cursor-pointer overflow-hidden">
+                 <input 
+                    type="range" 
+                    min="0" 
+                    max={totalDuration} 
                     value={globalTime}
-                    onPointerDown={() => isPlaying && setIsPlaying(false)}
-                    onPointerUp={() => setSeekKey(prev => prev + 1)}
                     onChange={(e) => {
-                       setGlobalTime(parseFloat(e.target.value));
+                       const t = Number(e.target.value);
+                       setGlobalTime(t);
+                       setSeekKey(prev => prev + 1);
                        prevSceneRef.current = -1;
                     }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -343,7 +322,6 @@ export function CanvasPreview({ state, onReset }: CanvasPreviewProps) {
              </div>
           </div>
         )}
-
       </div>
 
       {isExporting && (
@@ -354,7 +332,7 @@ export function CanvasPreview({ state, onReset }: CanvasPreviewProps) {
 }
 
 // Sub-component for rendering the actual text animation
-function KineticScene({ scene, fastRender, aspectRatio }: { scene: Scene, key?: React.Key, fastRender?: boolean, aspectRatio?: string }) {
+const KineticScene = React.memo(function KineticScene({ scene, fastRender, aspectRatio }: { scene: Scene, key?: React.Key, fastRender?: boolean, aspectRatio?: string }) {
   
   if (scene.layout === 'custom-html' && scene.customHtml) {
     return <CustomHtmlLayout scene={scene} fastRender={fastRender} aspectRatio={aspectRatio} />
@@ -460,10 +438,10 @@ function KineticScene({ scene, fastRender, aspectRatio }: { scene: Scene, key?: 
       </h1>
     </motion.div>
   );
-}
+});
 
 function CounterLayout({ scene, start, end, prefix, fastRender, aspectRatio }: { scene: Scene, start: number, end: number, prefix: string, fastRender?: boolean, aspectRatio?: string }) {
-  const [count, setCount] = React.useState(start);
+  const [count, setCount] = React.useState(start || 0);
   const theme = scene.themeConfig || { primaryColor: '#FF5A00', textColor: '#FFFFFF' };
   
   React.useEffect(() => {
@@ -473,7 +451,7 @@ function CounterLayout({ scene, start, end, prefix, fastRender, aspectRatio }: {
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / duration, 1);
       const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-      setCount(Math.floor(ease * (end - start) + start));
+      setCount(Math.floor(ease * ((end || 100) - (start || 0)) + (start || 0)));
       if (progress < 1) {
         window.requestAnimationFrame(step);
       }
